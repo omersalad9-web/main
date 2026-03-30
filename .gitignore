@@ -1,0 +1,21 @@
+# Obviously~
+.claude/
+CLAUDE.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Environment
+.env
+
+# Database
+*.db
+
+# Logs
+*.log
