@@ -1,149 +1,150 @@
-// Vault — Lock Screen
-// The first thing a user sees. Biometric gate before any financial data is shown.
-
-import React from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  StatusBar,
-} from 'react-native';
-import { useAuthContext } from '../hooks/AuthContext';
+import React, { useState } from 'react';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../constants/theme';
 
-export default function LockScreen() {
-  const { isLoading, hasBiometrics, biometricType, authenticate } = useAuthContext();
-
-  const handleUnlock = async () => {
-    await authenticate();
-  };
-
-  const biometricLabel = biometricType
-    ? `Unlock with ${biometricType}`
-    : 'Unlock Vault';
-
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
-
-      {/* Logo section */}
-      <View style={styles.logoSection}>
-        <Text style={styles.logo}>VAULT</Text>
-        <View style={styles.divider} />
-        <Text style={styles.tagline}>Your money. Your device. Your rules.</Text>
-      </View>
-
-      {/* Unlock section */}
-      <View style={styles.unlockSection}>
-        {isLoading ? (
-          <ActivityIndicator size="large" color={colors.gold} />
-        ) : (
-          <>
-            <TouchableOpacity
-              style={styles.unlockButton}
-              onPress={handleUnlock}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.unlockIcon}>
-                {biometricType === 'Face ID' ? '⬡' : '◈'}
-              </Text>
-              <Text style={styles.unlockLabel}>{biometricLabel}</Text>
-            </TouchableOpacity>
-
-            {!hasBiometrics && (
-              <Text style={styles.noBiometricNote}>
-                Set up biometrics in your device settings for the full Vault experience.
-              </Text>
-            )}
-          </>
-        )}
-      </View>
-
-      {/* Bottom notice */}
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>No data leaves your device — ever.</Text>
-      </View>
-    </View>
-  );
+interface LockScreenProps {
+  onUnlock: () => void;
 }
 
-const styles = StyleSheet.create({
+const styles: Record<string, React.CSSProperties> = {
   container: {
-    flex: 1,
+    width: '100%',
+    height: '100vh',
     backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.xxl,
-    paddingHorizontal: spacing.xl,
-  },
-  logoSection: {
-    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
   },
-  logo: {
+  // Subtle radial glow behind the logo
+  glow: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -60%)',
+    width: 320,
+    height: 320,
+    borderRadius: '50%',
+    background: `radial-gradient(circle, rgba(232,184,109,0.10) 0%, transparent 70%)`,
+    pointerEvents: 'none',
+  },
+  content: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: spacing.lg,
+    zIndex: 1,
+    padding: `0 ${spacing.xl}px`,
+  },
+  logoMark: {
     fontSize: 48,
+    lineHeight: 1,
+    color: colors.gold,
+    marginBottom: spacing.xs,
+  },
+  brandName: {
+    fontSize: 52,
     fontWeight: fontWeight.bold,
     color: colors.gold,
-    letterSpacing: 12,
-  },
-  divider: {
-    width: 40,
-    height: 1,
-    backgroundColor: colors.gold,
-    opacity: 0.4,
-    marginVertical: spacing.md,
+    letterSpacing: '0.28em',
+    lineHeight: 1,
+    fontFamily: 'inherit',
   },
   tagline: {
     fontSize: fontSize.md,
     fontWeight: fontWeight.regular,
     color: colors.textMuted,
     textAlign: 'center',
-    letterSpacing: 0.5,
+    letterSpacing: '0.02em',
+    lineHeight: 1.6,
+    maxWidth: 280,
+    marginTop: spacing.xs,
   },
-  unlockSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingBottom: spacing.xl,
+  divider: {
+    width: 40,
+    height: 1,
+    backgroundColor: colors.border,
+    marginTop: spacing.sm,
   },
   unlockButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.accentDim,
-    borderWidth: 1,
-    borderColor: colors.gold,
-    borderRadius: borderRadius.xl,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.xxl,
-    gap: spacing.sm,
-    minWidth: 220,
-  },
-  unlockIcon: {
-    fontSize: 32,
-    color: colors.gold,
-  },
-  unlockLabel: {
-    fontSize: fontSize.lg,
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+    paddingLeft: spacing.xxl,
+    paddingRight: spacing.xxl,
+    backgroundColor: 'transparent',
+    border: `1.5px solid ${colors.gold}`,
+    borderRadius: borderRadius.full,
+    cursor: 'pointer',
+    fontSize: fontSize.md,
     fontWeight: fontWeight.semibold,
     color: colors.gold,
-    letterSpacing: 0.5,
+    letterSpacing: '0.08em',
+    transition: 'background-color 0.2s ease, color 0.2s ease',
   },
-  noBiometricNote: {
-    marginTop: spacing.lg,
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    textAlign: 'center',
-    maxWidth: 260,
-    lineHeight: 20,
+  unlockButtonHovered: {
+    backgroundColor: colors.accentDim,
   },
   footer: {
+    position: 'absolute',
+    bottom: spacing.xl,
+    left: 0,
+    right: 0,
+    display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
+    gap: spacing.xs,
+    paddingBottom: spacing.md,
+  },
+  footerIcon: {
+    fontSize: 16,
+    color: colors.textMuted,
+    opacity: 0.6,
   },
   footerText: {
     fontSize: fontSize.xs,
     color: colors.textMuted,
-    letterSpacing: 0.3,
+    textAlign: 'center',
+    letterSpacing: '0.02em',
+    opacity: 0.7,
   },
-});
+};
+
+const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
+  const [btnHovered, setBtnHovered] = useState(false);
+
+  return (
+    <div style={styles.container}>
+      <div style={styles.glow} />
+
+      <div style={styles.content}>
+        <span style={styles.logoMark}>◆</span>
+        <span style={styles.brandName}>VAULT</span>
+        <p style={{ ...styles.tagline, margin: 0 }}>
+          Your money. Your device. Your rules.
+        </p>
+        <div style={styles.divider} />
+
+        <button
+          style={{
+            ...styles.unlockButton,
+            ...(btnHovered ? styles.unlockButtonHovered : {}),
+          }}
+          onClick={onUnlock}
+          onMouseEnter={() => setBtnHovered(true)}
+          onMouseLeave={() => setBtnHovered(false)}
+        >
+          Unlock Vault
+        </button>
+      </div>
+
+      <div style={styles.footer}>
+        <span style={styles.footerIcon}>🔒</span>
+        <span style={styles.footerText}>No data leaves your device — ever.</span>
+      </div>
+    </div>
+  );
+};
+
+export default LockScreen;

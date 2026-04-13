@@ -1,5 +1,4 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
 import { colors, fontSize, fontWeight, spacing } from '../constants/theme';
 
 interface SectionHeaderProps {
@@ -7,51 +6,53 @@ interface SectionHeaderProps {
   onSeeAll?: () => void;
 }
 
-export function SectionHeader({ title, onSeeAll }: SectionHeaderProps) {
+const SectionHeader: React.FC<SectionHeaderProps> = ({ title, onSeeAll }) => {
+  const [hovered, setHovered] = useState(false);
+
+  const styles: Record<string, React.CSSProperties> = {
+    row: {
+      display: 'flex',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: spacing.sm,
+    },
+    title: {
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.semibold,
+      color: colors.textMuted,
+      letterSpacing: '1px',
+      textTransform: 'uppercase' as const,
+    },
+    seeAll: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium,
+      color: hovered ? '#d4a355' : colors.gold,
+      cursor: 'pointer',
+      textDecoration: 'none',
+      letterSpacing: '0.2px',
+      transition: 'color 0.15s ease',
+      background: 'none',
+      border: 'none',
+      padding: 0,
+    },
+  };
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{title}</Text>
-
+    <div style={styles.row}>
+      <span style={styles.title}>{title}</span>
       {onSeeAll && (
-        <Pressable
-          onPress={onSeeAll}
-          style={({ pressed }: { pressed: boolean }) => [styles.seeAllButton, pressed && styles.seeAllPressed]}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={`See all ${title}`}
+        <button
+          style={styles.seeAll}
+          onClick={onSeeAll}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
         >
-          <Text style={styles.seeAllText}>See all</Text>
-        </Pressable>
+          See all
+        </button>
       )}
-    </View>
+    </div>
   );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
-  },
-  title: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold,
-    color: colors.textPrimary,
-    letterSpacing: 0.2,
-  },
-  seeAllButton: {
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
-  },
-  seeAllPressed: {
-    opacity: 0.6,
-  },
-  seeAllText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
-    color: colors.gold,
-  },
-});
+};
 
 export default SectionHeader;

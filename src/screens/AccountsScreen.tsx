@@ -1,461 +1,343 @@
-// Vault — Accounts Screen
-// All connected accounts, grouped by type. Floating "+" to add new connections.
-
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Modal,
-  StyleSheet,
-  Alert,
-  StatusBar,
-  SafeAreaView,
-} from 'react-native';
-import { useAccounts } from '../hooks/useAccounts';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../constants/theme';
+import Card from '../components/Card';
 import AccountTile from '../components/AccountTile';
-import type { Account } from '../types';
+import SectionHeader from '../components/SectionHeader';
+import { Account, AccountType } from '../types';
 
-// Section header component (inline until the shared component is built)
-function SectionHeader({ title, count }: { title: string; count: number }) {
-  return (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionHeaderTitle}>{title}</Text>
-      <View style={styles.sectionHeaderBadge}>
-        <Text style={styles.sectionHeaderBadgeText}>{count}</Text>
-      </View>
-    </View>
-  );
-}
+// ─── Demo data (same as HomeScreen) ──────────────────────────────────────────
 
-type AccountGroup = {
-  label: string;
-  type: Account['type'];
-  items: Account[];
+const DEMO_ACCOUNTS: Account[] = [
+  {
+    id: '1',
+    name: 'Barclays Current',
+    type: 'bank',
+    provider: 'Barclays',
+    balance: 4250.80,
+    currency: 'GBP',
+    lastSynced: new Date().toISOString(),
+  },
+  {
+    id: '2',
+    name: 'Bitcoin Wallet',
+    type: 'crypto',
+    provider: 'Coinbase',
+    balance: 12680.00,
+    currency: 'GBP',
+    lastSynced: new Date().toISOString(),
+  },
+  {
+    id: '3',
+    name: 'Stocks & Shares ISA',
+    type: 'investment',
+    provider: 'Trading 212',
+    balance: 28450.00,
+    currency: 'GBP',
+    lastSynced: new Date().toISOString(),
+  },
+];
+
+const TYPE_LABELS: Record<AccountType, string> = {
+  bank: 'Banking',
+  crypto: 'Crypto',
+  investment: 'Investments',
 };
 
-export default function AccountsScreen() {
-  const { accounts, isLoading, removeAccount, reload } = useAccounts();
-  const [connectSheetVisible, setConnectSheetVisible] = useState(false);
+const TYPE_ORDER: AccountType[] = ['bank', 'crypto', 'investment'];
 
-  const groups = ([
-    {
-      label: 'Banking',
-      type: 'bank' as const,
-      items: accounts.filter((a) => a.type === 'bank'),
+// ─── Modal ────────────────────────────────────────────────────────────────────
+
+interface ConnectModalProps {
+  onClose: () => void;
+}
+
+const ConnectModal: React.FC<ConnectModalProps> = ({ onClose }) => {
+  const [bankHovered, setBankHovered] = useState(false);
+  const [cryptoHovered, setCryptoHovered] = useState(false);
+
+  const styles: Record<string, React.CSSProperties> = {
+    overlay: {
+      position: 'fixed',
+      inset: 0,
+      backgroundColor: colors.overlay,
+      display: 'flex',
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+      zIndex: 100,
     },
-    {
-      label: 'Crypto',
-      type: 'crypto' as const,
-      items: accounts.filter((a) => a.type === 'crypto'),
+    sheet: {
+      width: '100%',
+      maxWidth: 560,
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: borderRadius.xl,
+      borderTopRightRadius: borderRadius.xl,
+      border: `1px solid ${colors.border}`,
+      borderBottom: 'none',
+      padding: spacing.xl,
+      boxSizing: 'border-box',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: spacing.md,
+      paddingBottom: spacing.xxl,
     },
-    {
-      label: 'Investments',
-      type: 'investment' as const,
-      items: accounts.filter((a) => a.type === 'investment'),
+    handle: {
+      width: 40,
+      height: 4,
+      borderRadius: borderRadius.full,
+      backgroundColor: colors.textMuted,
+      opacity: 0.4,
+      alignSelf: 'center',
+      marginBottom: spacing.sm,
     },
-  ] satisfies AccountGroup[]).filter((g) => g.items.length > 0);
-
-  const hasAccounts = accounts.length > 0;
-
-  const handleConnectBank = () => {
-    setConnectSheetVisible(false);
-    Alert.alert(
-      'Connect Bank',
-      'Vault uses TrueLayer to securely link your bank account. You will be redirected to your bank\'s authorisation page.\n\nYour login credentials are never seen or stored by Vault.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Continue',
-          onPress: () => {
-            // TrueLayer OAuth flow will be implemented here
-          },
-        },
-      ]
-    );
-  };
-
-  const handleConnectCrypto = () => {
-    setConnectSheetVisible(false);
-    Alert.alert(
-      'Connect Crypto',
-      'Enter a public wallet address or read-only API key to track your crypto holdings. Private keys are never requested.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Continue',
-          onPress: () => {
-            // Crypto connection flow will be implemented here
-          },
-        },
-      ]
-    );
-  };
-
-  const handleDisconnect = (account: Account) => {
-    Alert.alert(
-      'Disconnect Account',
-      `Remove "${account.name}" from Vault? This will delete all associated transaction history.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Disconnect',
-          style: 'destructive',
-          onPress: () => removeAccount(account.id),
-        },
-      ]
-    );
+    sheetTitle: {
+      fontSize: fontSize.xl,
+      fontWeight: fontWeight.bold,
+      color: colors.textPrimary,
+      textAlign: 'center',
+    },
+    sheetSubtitle: {
+      fontSize: fontSize.sm,
+      color: colors.textMuted,
+      textAlign: 'center',
+    },
+    optionBtn: {
+      display: 'flex',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      padding: spacing.md,
+      borderRadius: borderRadius.md,
+      border: `1px solid ${colors.border}`,
+      backgroundColor: colors.surfaceElevated,
+      cursor: 'pointer',
+      transition: 'border-color 0.15s ease, background-color 0.15s ease',
+    },
+    optionIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: borderRadius.sm,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: 22,
+    },
+    optionText: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 2,
+      flex: 1,
+      textAlign: 'left' as const,
+    },
+    optionTitle: {
+      fontSize: fontSize.md,
+      fontWeight: fontWeight.semibold,
+      color: colors.textPrimary,
+    },
+    optionDesc: {
+      fontSize: fontSize.xs,
+      color: colors.textMuted,
+    },
+    cancelBtn: {
+      background: 'none',
+      border: 'none',
+      cursor: 'pointer',
+      color: colors.textMuted,
+      fontSize: fontSize.sm,
+      padding: `${spacing.sm}px 0`,
+      textAlign: 'center' as const,
+    },
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+    <div style={styles.overlay} onClick={onClose}>
+      <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
+        <div style={styles.handle} />
+        <span style={styles.sheetTitle}>Connect Account</span>
+        <span style={styles.sheetSubtitle}>
+          Choose what type of account to connect
+        </span>
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Accounts</Text>
-        <Text style={styles.headerSubtitle}>
-          {hasAccounts
-            ? `${accounts.length} account${accounts.length !== 1 ? 's' : ''} connected`
-            : 'No accounts yet'}
-        </Text>
-      </View>
-
-      {/* Account list */}
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[
-          styles.scrollContent,
-          !hasAccounts && styles.scrollContentCentered,
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {hasAccounts ? (
-          groups.map((group) => (
-            <View key={group.type} style={styles.group}>
-              <SectionHeader title={group.label} count={group.items.length} />
-              {group.items.map((account) => (
-                <AccountTile
-                  key={account.id}
-                  account={account}
-                  onPress={() => handleDisconnect(account)}
-                />
-              ))}
-            </View>
-          ))
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>◈</Text>
-            <Text style={styles.emptyTitle}>No accounts connected</Text>
-            <Text style={styles.emptySubtitle}>
-              Tap the + button to link your first bank account, crypto wallet, or investment portfolio.
-            </Text>
-            <TouchableOpacity
-              style={styles.emptyButton}
-              onPress={() => setConnectSheetVisible(true)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.emptyButtonLabel}>Connect Account</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Floating + button */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => setConnectSheetVisible(true)}
-        activeOpacity={0.85}
-      >
-        <Text style={styles.fabIcon}>+</Text>
-      </TouchableOpacity>
-
-      {/* Connect bottom sheet */}
-      <Modal
-        visible={connectSheetVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setConnectSheetVisible(false)}
-      >
-        <TouchableOpacity
-          style={styles.sheetBackdrop}
-          activeOpacity={1}
-          onPress={() => setConnectSheetVisible(false)}
-        />
-        <View style={styles.sheet}>
-          <View style={styles.sheetHandle} />
-          <Text style={styles.sheetTitle}>Connect Account</Text>
-          <Text style={styles.sheetSubtitle}>
-            All data is stored locally on your device.
-          </Text>
-
-          <TouchableOpacity
-            style={styles.sheetOption}
-            onPress={handleConnectBank}
-            activeOpacity={0.8}
+        <button
+          style={{
+            ...styles.optionBtn,
+            borderColor: bankHovered ? colors.gold : colors.border,
+            backgroundColor: bankHovered ? colors.accentDim : colors.surfaceElevated,
+          }}
+          onMouseEnter={() => setBankHovered(true)}
+          onMouseLeave={() => setBankHovered(false)}
+          onClick={onClose}
+        >
+          <div
+            style={{
+              ...styles.optionIcon,
+              backgroundColor: 'rgba(96,165,250,0.15)',
+            }}
           >
-            <View style={styles.sheetOptionIcon}>
-              <Text style={styles.sheetOptionIconText}>◻</Text>
-            </View>
-            <View style={styles.sheetOptionMeta}>
-              <Text style={styles.sheetOptionTitle}>Connect Bank</Text>
-              <Text style={styles.sheetOptionSubtitle}>
-                Via TrueLayer — Barclays, HSBC, Monzo, Starling & more
-              </Text>
-            </View>
-            <Text style={styles.sheetOptionChevron}>›</Text>
-          </TouchableOpacity>
+            🏦
+          </div>
+          <div style={styles.optionText}>
+            <span style={styles.optionTitle}>Connect Bank</span>
+            <span style={styles.optionDesc}>
+              Link via Open Banking — read-only access
+            </span>
+          </div>
+          <span style={{ color: colors.textMuted, fontSize: 18 }}>›</span>
+        </button>
 
-          <View style={styles.sheetDivider} />
-
-          <TouchableOpacity
-            style={styles.sheetOption}
-            onPress={handleConnectCrypto}
-            activeOpacity={0.8}
+        <button
+          style={{
+            ...styles.optionBtn,
+            borderColor: cryptoHovered ? colors.gold : colors.border,
+            backgroundColor: cryptoHovered ? colors.accentDim : colors.surfaceElevated,
+          }}
+          onMouseEnter={() => setCryptoHovered(true)}
+          onMouseLeave={() => setCryptoHovered(false)}
+          onClick={onClose}
+        >
+          <div
+            style={{
+              ...styles.optionIcon,
+              backgroundColor: 'rgba(232,184,109,0.12)',
+            }}
           >
-            <View style={styles.sheetOptionIcon}>
-              <Text style={styles.sheetOptionIconText}>◈</Text>
-            </View>
-            <View style={styles.sheetOptionMeta}>
-              <Text style={styles.sheetOptionTitle}>Connect Crypto</Text>
-              <Text style={styles.sheetOptionSubtitle}>
-                BTC, ETH, SOL — read-only, no private keys
-              </Text>
-            </View>
-            <Text style={styles.sheetOptionChevron}>›</Text>
-          </TouchableOpacity>
+            ₿
+          </div>
+          <div style={styles.optionText}>
+            <span style={styles.optionTitle}>Connect Crypto</span>
+            <span style={styles.optionDesc}>
+              Add a wallet address or exchange API key
+            </span>
+          </div>
+          <span style={{ color: colors.textMuted, fontSize: 18 }}>›</span>
+        </button>
 
-          <TouchableOpacity
-            style={styles.sheetCancel}
-            onPress={() => setConnectSheetVisible(false)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.sheetCancelLabel}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-      </Modal>
-    </SafeAreaView>
+        <button style={styles.cancelBtn} onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </div>
   );
-}
+};
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  headerTitle: {
-    fontSize: fontSize.xxl,
-    fontWeight: fontWeight.bold,
-    color: colors.textPrimary,
-  },
-  headerSubtitle: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingVertical: spacing.lg,
-    paddingBottom: 100, // space for FAB
-  },
-  scrollContentCentered: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
-  // Groups
-  group: {
-    marginBottom: spacing.lg,
-  },
+const AccountsScreen: React.FC = () => {
+  const [accounts] = useState<Account[]>(DEMO_ACCOUNTS);
+  const [showModal, setShowModal] = useState(false);
+  const [fabHovered, setFabHovered] = useState(false);
 
-  // Section header
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
-  },
-  sectionHeaderTitle: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-  },
-  sectionHeaderBadge: {
-    backgroundColor: colors.surfaceHighlight,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-  },
-  sectionHeaderBadgeText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium,
-    color: colors.textSecondary,
-  },
+  const styles: Record<string, React.CSSProperties> = {
+    screen: {
+      width: '100%',
+      height: '100vh',
+      backgroundColor: colors.background,
+      overflowY: 'auto',
+      position: 'relative',
+      boxSizing: 'border-box',
+    },
+    inner: {
+      maxWidth: 600,
+      margin: '0 auto',
+      padding: `${spacing.xl}px ${spacing.md}px ${100}px`,
+      display: 'flex',
+      flexDirection: 'column',
+    },
+    pageHeader: {
+      marginBottom: spacing.lg,
+    },
+    pageTitle: {
+      fontSize: fontSize.xxl,
+      fontWeight: fontWeight.bold,
+      color: colors.textPrimary,
+    },
+    pageSubtitle: {
+      fontSize: fontSize.sm,
+      color: colors.textMuted,
+      marginTop: spacing.xs,
+    },
+    fab: {
+      position: 'fixed',
+      bottom: spacing.xxl,
+      right: '50%',
+      transform: 'translateX(260px)',
+      width: 56,
+      height: 56,
+      borderRadius: borderRadius.full,
+      backgroundColor: fabHovered ? '#d4a355' : colors.gold,
+      border: 'none',
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: 28,
+      color: colors.background,
+      fontWeight: fontWeight.bold,
+      boxShadow: `0 4px 24px rgba(232,184,109,0.35)`,
+      transition: 'background-color 0.15s ease, box-shadow 0.15s ease',
+      zIndex: 50,
+      lineHeight: 1,
+    },
+  };
 
-  // Empty state
-  emptyState: {
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    gap: spacing.md,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    color: colors.textMuted,
-  },
-  emptyTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.semibold,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  emptySubtitle: {
-    fontSize: fontSize.md,
-    color: colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 22,
-    maxWidth: 300,
-  },
-  emptyButton: {
-    marginTop: spacing.sm,
-    backgroundColor: colors.accentDim,
-    borderWidth: 1,
-    borderColor: colors.gold,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-  },
-  emptyButtonLabel: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.semibold,
-    color: colors.gold,
-  },
+  // Group accounts by type
+  const grouped = TYPE_ORDER.reduce<Record<string, Account[]>>((acc, type) => {
+    const filtered = accounts.filter((a) => a.type === type);
+    if (filtered.length > 0) acc[type] = filtered;
+    return acc;
+  }, {});
 
-  // FAB
-  fab: {
-    position: 'absolute',
-    bottom: spacing.xl,
-    right: spacing.xl,
-    width: 56,
-    height: 56,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.gold,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.gold,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  fabIcon: {
-    fontSize: 28,
-    fontWeight: fontWeight.bold,
-    color: colors.background,
-    lineHeight: 32,
-  },
+  return (
+    <div style={styles.screen}>
+      <div style={styles.inner}>
+        {/* Page header */}
+        <div style={styles.pageHeader}>
+          <h1 style={{ ...styles.pageTitle, margin: 0 }}>Accounts</h1>
+          <p style={{ ...styles.pageSubtitle, margin: `${spacing.xs}px 0 0` }}>
+            {accounts.length} account{accounts.length !== 1 ? 's' : ''} connected
+          </p>
+        </div>
 
-  // Bottom sheet
-  sheetBackdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-  },
-  sheet: {
-    backgroundColor: colors.surfaceElevated,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xxl,
-    borderTopWidth: 1,
-    borderColor: colors.border,
-  },
-  sheetHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: colors.border,
-    borderRadius: borderRadius.full,
-    alignSelf: 'center',
-    marginTop: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  sheetTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
-    color: colors.textPrimary,
-    marginBottom: spacing.xs,
-  },
-  sheetSubtitle: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    marginBottom: spacing.xl,
-  },
-  sheetOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    gap: spacing.md,
-  },
-  sheetOptionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.accentDim,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sheetOptionIconText: {
-    fontSize: 20,
-    color: colors.gold,
-  },
-  sheetOptionMeta: {
-    flex: 1,
-    gap: 3,
-  },
-  sheetOptionTitle: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.semibold,
-    color: colors.textPrimary,
-  },
-  sheetOptionSubtitle: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-  },
-  sheetOptionChevron: {
-    fontSize: 22,
-    color: colors.textMuted,
-    fontWeight: fontWeight.regular,
-  },
-  sheetDivider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: spacing.xs,
-  },
-  sheetCancel: {
-    marginTop: spacing.lg,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    backgroundColor: colors.surfaceHighlight,
-    borderRadius: borderRadius.lg,
-  },
-  sheetCancelLabel: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.medium,
-    color: colors.textSecondary,
-  },
-});
+        {/* Grouped account list */}
+        {TYPE_ORDER.map((type) => {
+          const group = grouped[type];
+          if (!group) return null;
+          return (
+            <div key={type}>
+              <SectionHeader title={TYPE_LABELS[type]} />
+              <Card style={{ marginBottom: spacing.md }}>
+                {group.map((acc, i) => (
+                  <div
+                    key={acc.id}
+                    style={
+                      i < group.length - 1
+                        ? { borderBottom: `1px solid ${colors.border}` }
+                        : {}
+                    }
+                  >
+                    <AccountTile account={acc} onClick={() => {}} />
+                  </div>
+                ))}
+              </Card>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Floating action button */}
+      <button
+        style={styles.fab}
+        onClick={() => setShowModal(true)}
+        onMouseEnter={() => setFabHovered(true)}
+        onMouseLeave={() => setFabHovered(false)}
+        aria-label="Add account"
+      >
+        +
+      </button>
+
+      {/* Connect modal */}
+      {showModal && <ConnectModal onClose={() => setShowModal(false)} />}
+    </div>
+  );
+};
+
+export default AccountsScreen;

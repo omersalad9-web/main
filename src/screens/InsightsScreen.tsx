@@ -1,243 +1,282 @@
-// Vault — Insights Screen
-// Net worth timeline, health score breakdown, and anomaly alerts.
-
-import React, { useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  StatusBar,
-} from 'react-native';
+import React, { useState } from 'react';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../constants/theme';
+import Card from '../components/Card';
 import HealthRing from '../components/HealthRing';
 import NetWorthChart from '../components/NetWorthChart';
 import AlertBanner from '../components/AlertBanner';
-import Card from '../components/Card';
 import SectionHeader from '../components/SectionHeader';
-import type { NetWorthSnapshot, AnomalyAlert } from '../types';
+import { NetWorthSnapshot, AnomalyAlert } from '../types';
 
-// Generate sample net worth data for the chart
-function generateSampleHistory(): NetWorthSnapshot[] {
-  const data: NetWorthSnapshot[] = [];
-  let total = 42000;
-  const now = new Date();
+// ─── Demo data ────────────────────────────────────────────────────────────────
+
+function generateNetWorthData(): NetWorthSnapshot[] {
+  const snapshots: NetWorthSnapshot[] = [];
+  const today = new Date();
+  let base = 42000;
 
   for (let i = 29; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i);
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
 
-    total += (Math.random() - 0.35) * 800;
-    total = Math.max(total, 38000);
+    // Slight daily growth with noise
+    const noise = (Math.random() - 0.4) * 400;
+    base = Math.max(40000, base + noise + 80);
 
-    data.push({
-      date: date.toISOString().split('T')[0],
-      total: Math.round(total * 100) / 100,
+    snapshots.push({
+      date: d.toISOString().split('T')[0],
+      total: Math.round(base),
       breakdown: {
-        banking: Math.round(total * 0.55 * 100) / 100,
-        crypto: Math.round(total * 0.25 * 100) / 100,
-        investments: Math.round(total * 0.20 * 100) / 100,
+        banking: Math.round(base * 0.094),
+        crypto: Math.round(base * 0.28),
+        investments: Math.round(base * 0.626),
       },
     });
   }
-  return data;
+
+  return snapshots;
 }
 
-const SAMPLE_ALERTS: AnomalyAlert[] = [
+const DEMO_NET_WORTH_DATA = generateNetWorthData();
+
+const DEMO_ALERTS: AnomalyAlert[] = [
   {
-    id: 'alert-1',
-    transactionId: 'tx-1',
+    id: 'a1',
+    transactionId: 't1',
     type: 'duplicate_charge',
-    message: 'Possible duplicate: Amazon charged £29.99 twice within 24 hours.',
+    message: 'Netflix charged you twice on 10 Apr — £15.99 appears twice within 24 hours.',
     severity: 'high',
     isRead: false,
     createdAt: new Date().toISOString(),
   },
   {
-    id: 'alert-2',
-    transactionId: 'tx-2',
+    id: 'a2',
+    transactionId: 't2',
     type: 'spending_spike',
-    message: 'Spending spike yesterday: £342.00 spent (280% of your daily average).',
+    message: 'Your spending this week is 42% higher than your monthly average.',
     severity: 'medium',
     isRead: false,
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
+    createdAt: new Date().toISOString(),
   },
   {
-    id: 'alert-3',
-    transactionId: 'tx-3',
+    id: 'a3',
+    transactionId: 't3',
     type: 'unknown_merchant',
-    message: 'New merchant: £67.50 charged by "DGTL Services Ltd" — first time seeing this merchant.',
+    message: 'Unrecognised charge of £28.50 from "MXPMT*3XB7Q" — verify this transaction.',
     severity: 'low',
     isRead: false,
-    createdAt: new Date(Date.now() - 172800000).toISOString(),
+    createdAt: new Date().toISOString(),
   },
 ];
 
-export default function InsightsScreen() {
-  const sampleHistory = useMemo(() => generateSampleHistory(), []);
-  const [alerts, setAlerts] = useState(SAMPLE_ALERTS);
+const HEALTH_BARS = [
+  { label: 'Savings Rate', score: 78, color: colors.positive },
+  { label: 'Debt Management', score: 85, color: colors.positive },
+  { label: 'Spending Trend', score: 55, color: colors.gold },
+  { label: 'Net Worth Growth', score: 68, color: colors.gold },
+];
 
-  const healthScore = 72;
-  const scoreBreakdown = [
-    { label: 'Savings Rate', score: 78, color: colors.positive },
-    { label: 'Debt Ratio', score: 85, color: colors.positive },
-    { label: 'Spending Trend', score: 55, color: colors.warning },
-    { label: 'Net Worth Trend', score: 68, color: colors.gold },
-  ];
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
-  function handleDismissAlert(id: string) {
+const InsightsScreen: React.FC = () => {
+  const [alerts, setAlerts] = useState<AnomalyAlert[]>(DEMO_ALERTS);
+
+  const dismissAlert = (id: string) =>
     setAlerts((prev) => prev.filter((a) => a.id !== id));
-  }
+
+  const styles: Record<string, React.CSSProperties> = {
+    screen: {
+      width: '100%',
+      height: '100vh',
+      backgroundColor: colors.background,
+      overflowY: 'auto',
+      boxSizing: 'border-box',
+    },
+    inner: {
+      maxWidth: 600,
+      margin: '0 auto',
+      padding: `${spacing.xl}px ${spacing.md}px ${spacing.xxl}px`,
+      display: 'flex',
+      flexDirection: 'column',
+    },
+    pageTitle: {
+      fontSize: fontSize.xxl,
+      fontWeight: fontWeight.bold,
+      color: colors.textPrimary,
+      margin: 0,
+      marginBottom: spacing.lg,
+    },
+    // ── Chart card ─────────────────────────────────────────────────
+    chartCard: {
+      padding: spacing.md,
+      marginBottom: spacing.md,
+    },
+    chartHeader: {
+      display: 'flex',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: spacing.md,
+    },
+    chartTitle: {
+      fontSize: fontSize.md,
+      fontWeight: fontWeight.semibold,
+      color: colors.textPrimary,
+    },
+    chartPeriod: {
+      fontSize: fontSize.xs,
+      color: colors.textMuted,
+      backgroundColor: colors.surfaceElevated,
+      border: `1px solid ${colors.border}`,
+      borderRadius: borderRadius.sm,
+      padding: `${spacing.xs}px ${spacing.sm}px`,
+    },
+    // ── Health section ─────────────────────────────────────────────
+    healthRow: {
+      display: 'flex',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xl,
+      padding: spacing.md,
+    },
+    barsContainer: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: spacing.md,
+      flex: 1,
+    },
+    barRow: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: spacing.xs,
+    },
+    barMeta: {
+      display: 'flex',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    barLabel: {
+      fontSize: fontSize.xs,
+      color: colors.textSecondary,
+      fontWeight: fontWeight.medium,
+    },
+    barValue: {
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.semibold,
+    },
+    barTrack: {
+      height: 6,
+      backgroundColor: colors.surfaceHighlight,
+      borderRadius: borderRadius.full,
+      overflow: 'hidden',
+    },
+    // ── Alerts ─────────────────────────────────────────────────────
+    alertsList: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: spacing.sm,
+    },
+    noAlerts: {
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      padding: `${spacing.xl}px`,
+      gap: spacing.sm,
+    },
+    noAlertsIcon: {
+      fontSize: 32,
+    },
+    noAlertsText: {
+      fontSize: fontSize.sm,
+      color: colors.textMuted,
+      textAlign: 'center',
+    },
+  };
+
+  const lastSnapshot = DEMO_NET_WORTH_DATA[DEMO_NET_WORTH_DATA.length - 1];
 
   return (
-    <View style={styles.screen}>
-      <StatusBar barStyle="light-content" />
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Insights</Text>
-        </View>
+    <div style={styles.screen}>
+      <div style={styles.inner}>
+        <h1 style={styles.pageTitle}>Insights</h1>
 
         {/* Net Worth Timeline */}
-        <View style={styles.section}>
-          <SectionHeader title="Net Worth Timeline" />
-          <Card style={styles.chartCard}>
-            <NetWorthChart data={sampleHistory} width={320} height={180} />
-          </Card>
-        </View>
+        <SectionHeader title="Net Worth Timeline" />
+        <Card style={{ marginBottom: spacing.md, overflow: 'hidden' }}>
+          <div style={styles.chartCard}>
+            <div style={styles.chartHeader}>
+              <div>
+                <div style={styles.chartTitle}>
+                  £{lastSnapshot.total.toLocaleString('en-GB')}
+                </div>
+                <div style={{ fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 }}>
+                  Current net worth
+                </div>
+              </div>
+              <span style={styles.chartPeriod}>30 days</span>
+            </div>
+            <NetWorthChart
+              data={DEMO_NET_WORTH_DATA}
+              width={520}
+              height={160}
+            />
+          </div>
+        </Card>
 
         {/* Financial Health */}
-        <View style={styles.section}>
-          <SectionHeader title="Financial Health" />
-          <Card style={styles.healthCard}>
-            <View style={styles.healthRow}>
-              <HealthRing score={healthScore} size={100} strokeWidth={8} />
-              <View style={styles.healthBreakdown}>
-                {scoreBreakdown.map((item) => (
-                  <View key={item.label} style={styles.scoreRow}>
-                    <Text style={styles.scoreLabel}>{item.label}</Text>
-                    <View style={styles.scoreBarContainer}>
-                      <View
-                        style={[
-                          styles.scoreBar,
-                          { width: `${item.score}%`, backgroundColor: item.color },
-                        ]}
-                      />
-                    </View>
-                    <Text style={[styles.scoreValue, { color: item.color }]}>
-                      {item.score}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          </Card>
-        </View>
+        <SectionHeader title="Financial Health" />
+        <Card style={{ marginBottom: spacing.md }}>
+          <div style={styles.healthRow}>
+            <HealthRing score={72} size={110} />
+            <div style={styles.barsContainer}>
+              {HEALTH_BARS.map(({ label, score, color }) => (
+                <div key={label} style={styles.barRow}>
+                  <div style={styles.barMeta}>
+                    <span style={styles.barLabel}>{label}</span>
+                    <span style={{ ...styles.barValue, color }}>{score}</span>
+                  </div>
+                  <div style={styles.barTrack}>
+                    <div
+                      style={{
+                        height: '100%',
+                        width: `${score}%`,
+                        backgroundColor: color,
+                        borderRadius: borderRadius.full,
+                        transition: 'width 0.6s ease',
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
 
         {/* Alerts */}
-        <View style={styles.section}>
-          <SectionHeader title={`Alerts (${alerts.length})`} />
-          {alerts.length > 0 ? (
-            <View style={styles.alertsList}>
-              {alerts.map((alert) => (
-                <AlertBanner
-                  key={alert.id}
-                  alert={alert}
-                  onDismiss={handleDismissAlert}
-                />
-              ))}
-            </View>
-          ) : (
-            <Card>
-              <Text style={styles.noAlerts}>All clear — no anomalies detected.</Text>
-            </Card>
-          )}
-        </View>
-      </ScrollView>
-    </View>
+        <SectionHeader title="Alerts" />
+        {alerts.length === 0 ? (
+          <Card>
+            <div style={styles.noAlerts}>
+              <span style={styles.noAlertsIcon}>✓</span>
+              <span style={styles.noAlertsText}>
+                No alerts — everything looks normal.
+              </span>
+            </div>
+          </Card>
+        ) : (
+          <div style={styles.alertsList}>
+            {alerts.map((alert) => (
+              <AlertBanner
+                key={alert.id}
+                alert={alert}
+                onDismiss={dismissAlert}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
-}
+};
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: spacing.xxl,
-  },
-  header: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxl,
-    paddingBottom: spacing.md,
-  },
-  headerTitle: {
-    fontSize: fontSize.xxl,
-    fontWeight: fontWeight.bold,
-    color: colors.textPrimary,
-  },
-  section: {
-    paddingHorizontal: spacing.xl,
-    marginBottom: spacing.lg,
-  },
-  chartCard: {
-    alignItems: 'center',
-    paddingVertical: spacing.lg,
-  },
-  healthCard: {
-    padding: spacing.lg,
-  },
-  healthRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.lg,
-  },
-  healthBreakdown: {
-    flex: 1,
-    gap: spacing.sm,
-  },
-  scoreRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  scoreLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    width: 90,
-  },
-  scoreBarContainer: {
-    flex: 1,
-    height: 6,
-    backgroundColor: colors.surfaceHighlight,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  scoreBar: {
-    height: 6,
-    borderRadius: 3,
-  },
-  scoreValue: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
-    width: 28,
-    textAlign: 'right',
-  },
-  alertsList: {
-    gap: spacing.sm,
-  },
-  noAlerts: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    paddingVertical: spacing.md,
-  },
-});
+export default InsightsScreen;

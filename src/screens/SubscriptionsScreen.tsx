@@ -1,383 +1,261 @@
-// Vault — Subscriptions Screen
-// Track recurring charges, identify the "monthly bleed", and surface unused subscriptions.
-
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  StatusBar,
-  SafeAreaView,
-} from 'react-native';
-import {
-  calculateMonthlyBleed,
-  findUnusedSubscriptions,
-} from '../services/subscriptionDetector';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../constants/theme';
-import SubscriptionRow from '../components/SubscriptionRow';
 import Card from '../components/Card';
-import type { Subscription } from '../types';
+import SubscriptionRow from '../components/SubscriptionRow';
+import SectionHeader from '../components/SectionHeader';
+import { Subscription } from '../types';
+import { calculateMonthlyBleed, findUnusedSubscriptions } from '../services/subscriptionDetector';
 
-// Demo subscriptions — representative data so the UI is fully visible before
-// real transaction-detection data is wired through.
-const DEMO_SUBSCRIPTIONS: Subscription[] = [
-  {
-    id: 'sub_1',
-    name: 'Netflix',
-    amount: 15.99,
-    currency: 'GBP',
-    frequency: 'monthly',
-    lastChargeDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    nextChargeDate: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000).toISOString(),
-    isActive: true,
-    daysSinceLastUse: 38, // unused — will trigger warning
-    accountId: 'acc_1',
-    merchant: 'Netflix',
-  },
-  {
-    id: 'sub_2',
-    name: 'Spotify',
-    amount: 10.99,
-    currency: 'GBP',
-    frequency: 'monthly',
-    lastChargeDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-    nextChargeDate: new Date(Date.now() + 27 * 24 * 60 * 60 * 1000).toISOString(),
-    isActive: true,
-    daysSinceLastUse: 2,
-    accountId: 'acc_1',
-    merchant: 'Spotify',
-  },
-  {
-    id: 'sub_3',
-    name: 'Adobe Creative Cloud',
-    amount: 54.99,
-    currency: 'GBP',
-    frequency: 'monthly',
-    lastChargeDate: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-    nextChargeDate: new Date(Date.now() + 22 * 24 * 60 * 60 * 1000).toISOString(),
-    isActive: true,
-    daysSinceLastUse: 45, // unused — will trigger warning
-    accountId: 'acc_1',
-    merchant: 'Adobe',
-  },
-  {
-    id: 'sub_4',
-    name: 'Apple iCloud+',
-    amount: 2.99,
-    currency: 'GBP',
-    frequency: 'monthly',
-    lastChargeDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-    nextChargeDate: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString(),
-    isActive: true,
-    daysSinceLastUse: 0,
-    accountId: 'acc_1',
-    merchant: 'Apple',
-  },
-  {
-    id: 'sub_5',
-    name: 'Amazon Prime',
-    amount: 8.99,
-    currency: 'GBP',
-    frequency: 'monthly',
-    lastChargeDate: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
-    nextChargeDate: new Date(Date.now() + 16 * 24 * 60 * 60 * 1000).toISOString(),
-    isActive: true,
-    daysSinceLastUse: 7,
-    accountId: 'acc_1',
-    merchant: 'Amazon',
-  },
-  {
-    id: 'sub_6',
-    name: 'GitHub Copilot',
-    amount: 9.17,
-    currency: 'GBP',
-    frequency: 'monthly',
-    lastChargeDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    nextChargeDate: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString(),
-    isActive: true,
-    daysSinceLastUse: 1,
-    accountId: 'acc_1',
-    merchant: 'GitHub',
-  },
-];
+// ─── Demo data ────────────────────────────────────────────────────────────────
 
-function formatCurrency(amount: number): string {
-  return `£${amount.toLocaleString('en-GB', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+function makeSub(
+  id: string,
+  name: string,
+  amount: number,
+  daysSinceLastUse: number,
+  daysUntilNext: number = 5,
+): Subscription {
+  const now = new Date();
+  const lastCharge = new Date(now);
+  lastCharge.setDate(lastCharge.getDate() - 15);
+  const nextCharge = new Date(now);
+  nextCharge.setDate(nextCharge.getDate() + daysUntilNext);
+
+  return {
+    id,
+    name,
+    amount,
+    currency: 'GBP',
+    frequency: 'monthly',
+    lastChargeDate: lastCharge.toISOString(),
+    nextChargeDate: nextCharge.toISOString(),
+    isActive: true,
+    daysSinceLastUse,
+    accountId: '1',
+    merchant: name,
+  };
 }
 
-export default function SubscriptionsScreen() {
-  // In production this will come from getAllSubscriptions() + detectSubscriptions()
-  const [subscriptions] = useState<Subscription[]>(DEMO_SUBSCRIPTIONS);
+const DEMO_SUBSCRIPTIONS: Subscription[] = [
+  makeSub('s1', 'Netflix', 15.99, 38),
+  makeSub('s2', 'Spotify', 10.99, 2),
+  makeSub('s3', 'Adobe', 54.99, 45),
+  makeSub('s4', 'Icloud+', 2.99, 0),
+  makeSub('s5', 'Amazon Prime', 8.99, 7),
+  makeSub('s6', 'GitHub Copilot', 9.17, 1),
+];
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
+
+const SubscriptionsScreen: React.FC = () => {
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>(DEMO_SUBSCRIPTIONS);
 
   const monthlyBleed = calculateMonthlyBleed(subscriptions);
-  const unusedSubscriptions = findUnusedSubscriptions(subscriptions);
-  const hasUnused = unusedSubscriptions.length > 0;
-  const hasSubscriptions = subscriptions.length > 0;
+  const unused = findUnusedSubscriptions(subscriptions);
 
-  const annualCost = monthlyBleed * 12;
+  const handleDismissUnused = (id: string) => {
+    setSubscriptions((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, isActive: false } : s)),
+    );
+  };
+
+  const styles: Record<string, React.CSSProperties> = {
+    screen: {
+      width: '100%',
+      height: '100vh',
+      backgroundColor: colors.background,
+      overflowY: 'auto',
+      boxSizing: 'border-box',
+    },
+    inner: {
+      maxWidth: 600,
+      margin: '0 auto',
+      padding: `${spacing.xl}px ${spacing.md}px ${spacing.xxl}px`,
+      display: 'flex',
+      flexDirection: 'column',
+    },
+    pageTitle: {
+      fontSize: fontSize.xxl,
+      fontWeight: fontWeight.bold,
+      color: colors.textPrimary,
+      margin: 0,
+      marginBottom: spacing.lg,
+    },
+    // ── Bleed card ─────────────────────────────────────────────────
+    bleedCard: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: spacing.xs,
+      padding: spacing.lg,
+    },
+    bleedLabel: {
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.semibold,
+      color: colors.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: '1px',
+    },
+    bleedAmount: {
+      fontSize: 42,
+      fontWeight: fontWeight.bold,
+      color: colors.textPrimary,
+      letterSpacing: '-1px',
+      lineHeight: 1.1,
+    },
+    bleedSubtext: {
+      fontSize: fontSize.sm,
+      color: colors.textSecondary,
+    },
+    bleedDivider: {
+      height: 1,
+      backgroundColor: colors.border,
+      margin: `${spacing.md}px 0`,
+    },
+    bleedSavingsRow: {
+      display: 'flex',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    bleedSavingsLabel: {
+      fontSize: fontSize.sm,
+      color: colors.textMuted,
+    },
+    bleedSavingsValue: {
+      fontSize: fontSize.md,
+      fontWeight: fontWeight.semibold,
+      color: colors.positive,
+    },
+    // ── Warning banner ─────────────────────────────────────────────
+    warningBanner: {
+      display: 'flex',
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.md,
+      backgroundColor: 'rgba(251,191,36,0.08)',
+      border: `1px solid rgba(251,191,36,0.3)`,
+      borderRadius: borderRadius.md,
+      padding: spacing.md,
+      marginBottom: spacing.md,
+      boxSizing: 'border-box',
+    },
+    warningIcon: {
+      fontSize: 20,
+      lineHeight: 1,
+      flexShrink: 0,
+      marginTop: 1,
+    },
+    warningContent: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: spacing.xs,
+      flex: 1,
+    },
+    warningTitle: {
+      fontSize: fontSize.md,
+      fontWeight: fontWeight.semibold,
+      color: colors.warning,
+    },
+    warningBody: {
+      fontSize: fontSize.sm,
+      color: colors.textSecondary,
+      lineHeight: 1.5,
+    },
+    warningSavings: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.semibold,
+      color: colors.positive,
+    },
+  };
+
+  const unusedTotal = unused.reduce((sum, s) => sum + s.amount, 0);
+  const yearlyBleed = monthlyBleed * 12;
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+    <div style={styles.screen}>
+      <div style={styles.inner}>
+        <h1 style={styles.pageTitle}>Subscriptions</h1>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Subscriptions</Text>
-          <Text style={styles.headerSubtitle}>
-            {subscriptions.length} active subscription{subscriptions.length !== 1 ? 's' : ''}
-          </Text>
-        </View>
-
-        {/* Monthly bleed hero card */}
-        <Card style={styles.bleedCard}>
-          <Text style={styles.bleedLabel}>Monthly Bleed</Text>
-          <Text style={styles.bleedAmount}>{formatCurrency(monthlyBleed)}</Text>
-          <Text style={styles.bleedAnnual}>
-            {formatCurrency(annualCost)} / year
-          </Text>
-          <View style={styles.bleedDivider} />
-          <View style={styles.bleedMeta}>
-            <View style={styles.bleedMetaItem}>
-              <Text style={styles.bleedMetaValue}>{subscriptions.length}</Text>
-              <Text style={styles.bleedMetaLabel}>Services</Text>
-            </View>
-            <View style={styles.bleedMetaSeparator} />
-            <View style={styles.bleedMetaItem}>
-              <Text
-                style={[
-                  styles.bleedMetaValue,
-                  hasUnused && { color: colors.warning },
-                ]}
+        {/* Monthly Bleed card */}
+        <SectionHeader title="Monthly Bleed" />
+        <Card style={{ marginBottom: spacing.md }}>
+          <div style={styles.bleedCard}>
+            <span style={styles.bleedLabel}>Total Monthly Cost</span>
+            <span style={styles.bleedAmount}>
+              £{monthlyBleed.toFixed(2)}
+            </span>
+            <span style={styles.bleedSubtext}>
+              across {subscriptions.filter((s) => s.isActive).length} active subscriptions
+            </span>
+            <div style={styles.bleedDivider} />
+            <div style={styles.bleedSavingsRow}>
+              <span style={styles.bleedSavingsLabel}>Annual cost</span>
+              <span
+                style={{
+                  fontSize: fontSize.md,
+                  fontWeight: fontWeight.semibold,
+                  color: colors.textPrimary,
+                }}
               >
-                {unusedSubscriptions.length}
-              </Text>
-              <Text style={styles.bleedMetaLabel}>Unused</Text>
-            </View>
-            <View style={styles.bleedMetaSeparator} />
-            <View style={styles.bleedMetaItem}>
-              <Text style={styles.bleedMetaValue}>
-                {formatCurrency(
-                  unusedSubscriptions.reduce((sum, s) => sum + s.amount, 0)
-                )}
-              </Text>
-              <Text style={styles.bleedMetaLabel}>Waste</Text>
-            </View>
-          </View>
+                £{yearlyBleed.toFixed(2)}
+              </span>
+            </div>
+          </div>
         </Card>
 
-        {/* Unused subscription warning */}
-        {hasUnused && (
-          <View style={styles.warningBanner}>
-            <Text style={styles.warningIcon}>⚠</Text>
-            <View style={styles.warningBody}>
-              <Text style={styles.warningTitle}>
-                {unusedSubscriptions.length} unused subscription
-                {unusedSubscriptions.length !== 1 ? 's' : ''}
-              </Text>
-              <Text style={styles.warningText}>
-                {unusedSubscriptions.map((s) => s.name).join(', ')}{' '}
-                {unusedSubscriptions.length === 1 ? 'hasn\'t' : 'haven\'t'} been used in over 30 days.
-                Consider cancelling to save{' '}
-                {formatCurrency(
-                  unusedSubscriptions.reduce((sum, s) => sum + s.amount, 0)
-                )}
-                /mo.
-              </Text>
-            </View>
-          </View>
+        {/* Unused warning */}
+        {unused.length > 0 && (
+          <div style={styles.warningBanner}>
+            <span style={styles.warningIcon}>⚠️</span>
+            <div style={styles.warningContent}>
+              <span style={styles.warningTitle}>
+                {unused.length} unused subscription{unused.length > 1 ? 's' : ''} detected
+              </span>
+              <span style={styles.warningBody}>
+                {unused.map((s) => s.name).join(', ')} haven't been used in over 30 days.
+              </span>
+              <span style={styles.warningSavings}>
+                Cancel to save £{unusedTotal.toFixed(2)}/mo
+              </span>
+            </div>
+          </div>
         )}
 
         {/* Subscriptions list */}
-        {hasSubscriptions ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>All Subscriptions</Text>
-            {subscriptions.map((sub) => (
+        <SectionHeader title="All Subscriptions" />
+        <Card>
+          {subscriptions
+            .filter((s) => s.isActive)
+            .sort((a, b) => b.amount - a.amount)
+            .map((sub) => (
               <SubscriptionRow
                 key={sub.id}
                 subscription={sub}
               />
             ))}
-          </View>
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>○</Text>
-            <Text style={styles.emptyTitle}>No subscriptions detected</Text>
-            <Text style={styles.emptySubtitle}>
-              Connect a bank account and Vault will automatically detect recurring charges in your transaction history.
-            </Text>
-          </View>
+        </Card>
+
+        {/* Cancelled placeholder */}
+        {subscriptions.some((s) => !s.isActive) && (
+          <>
+            <SectionHeader title="Cancelled" />
+            <Card>
+              {subscriptions
+                .filter((s) => !s.isActive)
+                .map((sub) => (
+                  <div
+                    key={sub.id}
+                    style={{ opacity: 0.4 }}
+                  >
+                    <SubscriptionRow subscription={sub} />
+                  </div>
+                ))}
+            </Card>
+          </>
         )}
-      </ScrollView>
-    </SafeAreaView>
+      </div>
+    </div>
   );
-}
+};
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: spacing.xxl,
-  },
-
-  // Header
-  header: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  headerTitle: {
-    fontSize: fontSize.xxl,
-    fontWeight: fontWeight.bold,
-    color: colors.textPrimary,
-  },
-  headerSubtitle: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-  },
-
-  // Monthly bleed card
-  bleedCard: {
-    margin: spacing.xl,
-    marginBottom: spacing.md,
-    alignItems: 'center',
-  },
-  bleedLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-    marginBottom: spacing.sm,
-  },
-  bleedAmount: {
-    fontSize: 42,
-    fontWeight: fontWeight.bold,
-    color: colors.textPrimary,
-    letterSpacing: -1,
-  },
-  bleedAnnual: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-  },
-  bleedDivider: {
-    width: '100%',
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: spacing.md,
-  },
-  bleedMeta: {
-    flexDirection: 'row',
-    width: '100%',
-    alignItems: 'center',
-  },
-  bleedMetaItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 3,
-  },
-  bleedMetaValue: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
-    color: colors.textPrimary,
-  },
-  bleedMetaLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  bleedMetaSeparator: {
-    width: 1,
-    height: 28,
-    backgroundColor: colors.border,
-  },
-
-  // Warning banner
-  warningBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: 'rgba(251, 191, 36, 0.1)',
-    borderWidth: 1,
-    borderColor: colors.warning,
-    borderRadius: borderRadius.lg,
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.lg,
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-  warningIcon: {
-    fontSize: 18,
-    color: colors.warning,
-    marginTop: 1,
-  },
-  warningBody: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  warningTitle: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.semibold,
-    color: colors.warning,
-  },
-  warningText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    lineHeight: 20,
-  },
-
-  // Section
-  section: {
-    paddingHorizontal: spacing.xl,
-  },
-  sectionTitle: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    marginBottom: spacing.md,
-  },
-
-  // Empty state
-  emptyState: {
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxl,
-    gap: spacing.md,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    color: colors.textMuted,
-  },
-  emptyTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.semibold,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  emptySubtitle: {
-    fontSize: fontSize.md,
-    color: colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 22,
-    maxWidth: 300,
-  },
-});
+export default SubscriptionsScreen;

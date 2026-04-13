@@ -9,7 +9,7 @@ export const APP_CONFIG = {
   // TrueLayer Open Banking (read-only access only)
   trueLayer: {
     // These are set at build time via environment variables
-    clientId: process.env.EXPO_PUBLIC_TRUELAYER_CLIENT_ID ?? '',
+    clientId: '',
     authUrl: 'https://auth.truelayer.com',
     apiUrl: 'https://api.truelayer.com',
     redirectUri: 'vault://truelayer/callback',

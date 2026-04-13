@@ -1,49 +1,41 @@
-import React from 'react';
-import {
-  Pressable,
-  StyleSheet,
-  View,
-  ViewStyle,
-} from 'react-native';
+import React, { useState } from 'react';
 import { colors, spacing, borderRadius } from '../constants/theme';
 
 interface CardProps {
   children: React.ReactNode;
-  style?: ViewStyle | ViewStyle[];
-  onPress?: () => void;
+  style?: React.CSSProperties;
+  onClick?: () => void;
 }
 
-export function Card({ children, style, onPress }: CardProps) {
-  if (onPress) {
-    return (
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }: { pressed: boolean }) => [
-          styles.card,
-          pressed && styles.cardPressed,
-          style,
-        ]}
-      >
-        {children}
-      </Pressable>
-    );
-  }
+const baseStyle: React.CSSProperties = {
+  backgroundColor: colors.surface,
+  border: `1px solid ${colors.border}`,
+  borderRadius: borderRadius.md,
+  padding: spacing.md,
+  boxSizing: 'border-box',
+};
 
-  return <View style={[styles.card, style]}>{children}</View>;
-}
+const Card: React.FC<CardProps> = ({ children, style, onClick }) => {
+  const [hovered, setHovered] = useState(false);
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  cardPressed: {
-    backgroundColor: colors.surfaceHighlight,
-    opacity: 0.95,
-  },
-});
+  const interactiveStyle: React.CSSProperties = onClick
+    ? {
+        cursor: 'pointer',
+        backgroundColor: hovered ? colors.surfaceElevated : colors.surface,
+        transition: 'background-color 0.15s ease',
+      }
+    : {};
+
+  return (
+    <div
+      style={{ ...baseStyle, ...interactiveStyle, ...style }}
+      onClick={onClick}
+      onMouseEnter={onClick ? () => setHovered(true) : undefined}
+      onMouseLeave={onClick ? () => setHovered(false) : undefined}
+    >
+      {children}
+    </div>
+  );
+};
 
 export default Card;

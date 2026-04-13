@@ -1,5 +1,4 @@
-// Vault — Account data hook
-// Manages account state from local encrypted database.
+// Vault — Account data hook (web version)
 
 import { useState, useEffect, useCallback } from 'react';
 import {
@@ -21,7 +20,6 @@ export function useAccounts() {
     try {
       const data = await getAllAccounts();
       setAccounts(data);
-
       const history = await getNetWorthHistory(90);
       setNetWorthHistory(history);
     } catch (err) {
@@ -38,9 +36,8 @@ export function useAccounts() {
   const addAccount = useCallback(async (account: Omit<Account, 'id'>) => {
     const created = await insertAccount(account);
     setAccounts((prev) => [...prev, created]);
-    await recordNetWorthSnapshot([...accounts, created]);
     return created;
-  }, [accounts]);
+  }, []);
 
   const refreshBalance = useCallback(async (id: string, balance: number) => {
     await updateAccountBalance(id, balance);
@@ -51,10 +48,8 @@ export function useAccounts() {
 
   const removeAccount = useCallback(async (id: string) => {
     await dbDeleteAccount(id);
-    const updated = accounts.filter((a) => a.id !== id);
-    setAccounts(updated);
-    await recordNetWorthSnapshot(updated);
-  }, [accounts]);
+    setAccounts((prev) => prev.filter((a) => a.id !== id));
+  }, []);
 
   const totalNetWorth = accounts.reduce((sum, a) => sum + a.balance, 0);
 
@@ -63,16 +58,6 @@ export function useAccounts() {
     crypto: accounts.filter((a) => a.type === 'crypto').reduce((s, a) => s + a.balance, 0),
     investments: accounts.filter((a) => a.type === 'investment').reduce((s, a) => s + a.balance, 0),
   };
-
-  async function recordNetWorthSnapshot(currentAccounts: Account[]) {
-    const total = currentAccounts.reduce((s, a) => s + a.balance, 0);
-    const breakdown = {
-      banking: currentAccounts.filter((a) => a.type === 'bank').reduce((s, a) => s + a.balance, 0),
-      crypto: currentAccounts.filter((a) => a.type === 'crypto').reduce((s, a) => s + a.balance, 0),
-      investments: currentAccounts.filter((a) => a.type === 'investment').reduce((s, a) => s + a.balance, 0),
-    };
-    await insertNetWorthSnapshot({ total, breakdown });
-  }
 
   return {
     accounts,

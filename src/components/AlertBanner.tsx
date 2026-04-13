@@ -1,133 +1,137 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AnomalyAlert } from '../types';
-import { colors, fontSize, fontWeight, spacing, borderRadius } from '../constants/theme';
+import { colors, spacing, fontSize, fontWeight, borderRadius } from '../constants/theme';
 
 interface AlertBannerProps {
   alert: AnomalyAlert;
   onDismiss: (id: string) => void;
 }
 
-type SeverityStyle = {
-  background: string;
-  border: string;
-  iconColor: string;
-  icon: string;
-};
-
-const SEVERITY_STYLES: Record<AnomalyAlert['severity'], SeverityStyle> = {
+const SEVERITY_STYLES: Record<
+  AnomalyAlert['severity'],
+  { background: string; border: string; labelColor: string; labelBg: string }
+> = {
   high: {
-    background: 'rgba(248, 113, 113, 0.12)',
+    background: 'rgba(248, 113, 113, 0.1)',
     border: 'rgba(248, 113, 113, 0.35)',
-    iconColor: '#F87171',
-    icon: '⚠',
+    labelColor: colors.negative,
+    labelBg: 'rgba(248, 113, 113, 0.18)',
   },
   medium: {
-    background: 'rgba(232, 184, 109, 0.12)',
+    background: 'rgba(232, 184, 109, 0.1)',
     border: 'rgba(232, 184, 109, 0.35)',
-    iconColor: '#E8B86D',
-    icon: '◆',
+    labelColor: colors.gold,
+    labelBg: 'rgba(232, 184, 109, 0.18)',
   },
   low: {
-    background: 'rgba(96, 165, 250, 0.12)',
+    background: 'rgba(96, 165, 250, 0.1)',
     border: 'rgba(96, 165, 250, 0.35)',
-    iconColor: '#60A5FA',
-    icon: 'ℹ',
+    labelColor: colors.info,
+    labelBg: 'rgba(96, 165, 250, 0.18)',
   },
 };
 
-const TYPE_LABEL: Record<AnomalyAlert['type'], string> = {
+const TYPE_LABELS: Record<AnomalyAlert['type'], string> = {
   duplicate_charge: 'Duplicate Charge',
   spending_spike: 'Spending Spike',
   unknown_merchant: 'Unknown Merchant',
   unusual_amount: 'Unusual Amount',
 };
 
-export function AlertBanner({ alert, onDismiss }: AlertBannerProps) {
-  const { id, type, message, severity } = alert;
-  const theme = SEVERITY_STYLES[severity];
-  const typeLabel = TYPE_LABEL[type];
+const AlertBanner: React.FC<AlertBannerProps> = ({ alert, onDismiss }) => {
+  const [dismissHovered, setDismissHovered] = React.useState(false);
+  const theme = SEVERITY_STYLES[alert.severity];
+
+  const styles: Record<string, React.CSSProperties> = {
+    banner: {
+      display: 'flex',
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+      padding: spacing.md,
+      backgroundColor: theme.background,
+      border: `1px solid ${theme.border}`,
+      borderRadius: borderRadius.md,
+      boxSizing: 'border-box',
+    },
+    content: {
+      display: 'flex',
+      flexDirection: 'column',
+      flex: 1,
+      gap: 6,
+    },
+    headerRow: {
+      display: 'flex',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    typeLabel: {
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.semibold,
+      color: theme.labelColor,
+      backgroundColor: theme.labelBg,
+      paddingTop: 3,
+      paddingBottom: 3,
+      paddingLeft: spacing.xs + 2,
+      paddingRight: spacing.xs + 2,
+      borderRadius: borderRadius.full,
+      letterSpacing: '0.4px',
+      textTransform: 'uppercase' as const,
+    },
+    severityDot: {
+      width: 7,
+      height: 7,
+      borderRadius: borderRadius.full,
+      backgroundColor: theme.labelColor,
+      flexShrink: 0,
+      marginTop: 1,
+    },
+    message: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.regular,
+      color: colors.textSecondary,
+      lineHeight: 1.5,
+    },
+    dismissButton: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: 28,
+      height: 28,
+      borderRadius: borderRadius.full,
+      border: 'none',
+      backgroundColor: dismissHovered ? 'rgba(255,255,255,0.08)' : 'transparent',
+      cursor: 'pointer',
+      color: colors.textMuted,
+      fontSize: 16,
+      flexShrink: 0,
+      transition: 'background-color 0.15s ease, color 0.15s ease',
+      padding: 0,
+      lineHeight: 1,
+    },
+  };
 
   return (
-    <View
-      style={[
-        styles.banner,
-        {
-          backgroundColor: theme.background,
-          borderColor: theme.border,
-        },
-      ]}
-    >
-      {/* Icon */}
-      <Text style={[styles.icon, { color: theme.iconColor }]}>{theme.icon}</Text>
-
-      {/* Content */}
-      <View style={styles.content}>
-        <Text style={[styles.typeLabel, { color: theme.iconColor }]}>
-          {typeLabel}
-        </Text>
-        <Text style={styles.message} numberOfLines={2}>
-          {message}
-        </Text>
-      </View>
-
-      {/* Dismiss button */}
-      <Pressable
-        onPress={() => onDismiss(id)}
-        style={({ pressed }: { pressed: boolean }) => [styles.dismissButton, pressed && styles.dismissPressed]}
-        hitSlop={8}
-        accessibilityLabel="Dismiss alert"
-        accessibilityRole="button"
+    <div style={styles.banner}>
+      <div style={styles.content}>
+        <div style={styles.headerRow}>
+          <span style={styles.severityDot} />
+          <span style={styles.typeLabel}>{TYPE_LABELS[alert.type]}</span>
+        </div>
+        <p style={{ ...styles.message, margin: 0 }}>{alert.message}</p>
+      </div>
+      <button
+        style={styles.dismissButton}
+        onClick={() => onDismiss(alert.id)}
+        onMouseEnter={() => setDismissHovered(true)}
+        onMouseLeave={() => setDismissHovered(false)}
+        aria-label="Dismiss alert"
       >
-        <Text style={styles.dismissText}>✕</Text>
-      </Pressable>
-    </View>
+        ✕
+      </button>
+    </div>
   );
-}
-
-const styles = StyleSheet.create({
-  banner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    padding: spacing.md,
-    gap: spacing.sm,
-  },
-  icon: {
-    fontSize: fontSize.lg,
-    lineHeight: fontSize.lg * 1.4,
-    width: 20,
-    textAlign: 'center',
-  },
-  content: {
-    flex: 1,
-    gap: 4,
-  },
-  typeLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.bold,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  message: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.regular,
-    color: colors.textSecondary,
-    lineHeight: fontSize.sm * 1.5,
-  },
-  dismissButton: {
-    padding: spacing.xs,
-    borderRadius: borderRadius.full,
-  },
-  dismissPressed: {
-    backgroundColor: colors.surfaceHighlight,
-  },
-  dismissText: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    lineHeight: fontSize.sm * 1.4,
-  },
-});
+};
 
 export default AlertBanner;

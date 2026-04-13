@@ -1,8 +1,6 @@
-import React, { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
+import React from 'react';
 import { NetWorthSnapshot } from '../types';
-import { colors, fontSize, fontWeight, spacing } from '../constants/theme';
+import { colors, fontSize, fontWeight } from '../constants/theme';
 
 interface NetWorthChartProps {
   data: NetWorthSnapshot[];
@@ -10,171 +8,163 @@ interface NetWorthChartProps {
   height: number;
 }
 
-const PADDING = { top: 16, right: 8, bottom: 28, left: 8 };
-const GOLD = '#E8B86D';
-
-function buildPath(
-  points: { x: number; y: number }[],
-): string {
-  if (points.length === 0) return '';
-  if (points.length === 1) {
-    const p = points[0];
-    return `M ${p.x} ${p.y}`;
+/** Compute a Catmull-Rom spline path through the given points */
+function catmullRomPath(points: { x: number; y: number }[]): string {
+  if (points.length < 2) return '';
+  if (points.length === 2) {
+    return `M ${points[0].x},${points[0].y} L ${points[1].x},${points[1].y}`;
   }
 
-  // Catmull-Rom → cubic Bézier for smooth curve
-  let d = `M ${points[0].x} ${points[0].y}`;
+  let d = `M ${points[0].x},${points[0].y}`;
 
   for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[Math.max(i - 1, 0)];
+    const p0 = points[Math.max(0, i - 1)];
     const p1 = points[i];
     const p2 = points[i + 1];
-    const p3 = points[Math.min(i + 2, points.length - 1)];
+    const p3 = points[Math.min(points.length - 1, i + 2)];
 
     const cp1x = p1.x + (p2.x - p0.x) / 6;
     const cp1y = p1.y + (p2.y - p0.y) / 6;
     const cp2x = p2.x - (p3.x - p1.x) / 6;
     const cp2y = p2.y - (p3.y - p1.y) / 6;
 
-    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+    d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
   }
+
   return d;
 }
 
-function buildAreaPath(
-  points: { x: number; y: number }[],
-  chartBottom: number,
-): string {
-  if (points.length === 0) return '';
-  const linePath = buildPath(points);
-  const last = points[points.length - 1];
-  const first = points[0];
-  return `${linePath} L ${last.x} ${chartBottom} L ${first.x} ${chartBottom} Z`;
-}
-
-function formatShortCurrency(value: number): string {
-  if (Math.abs(value) >= 1_000_000) {
-    return `£${(value / 1_000_000).toFixed(1)}M`;
-  }
-  if (Math.abs(value) >= 1_000) {
-    return `£${(value / 1_000).toFixed(0)}k`;
-  }
+function formatCurrency(value: number): string {
+  if (Math.abs(value) >= 1_000_000) return `£${(value / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(value) >= 1_000) return `£${(value / 1_000).toFixed(1)}k`;
   return `£${value.toFixed(0)}`;
 }
 
-export function NetWorthChart({ data, width, height }: NetWorthChartProps) {
-  const chartWidth = width - PADDING.left - PADDING.right;
-  const chartHeight = height - PADDING.top - PADDING.bottom;
+const GRADIENT_ID = 'networth-gradient';
+const PADDING = { top: 12, right: 8, bottom: 36, left: 8 };
 
-  const { points, minVal, maxVal } = useMemo(() => {
-    if (data.length === 0) {
-      return { points: [], minVal: 0, maxVal: 0 };
-    }
-
-    const values = data.map((d) => d.total);
-    const rawMin = Math.min(...values);
-    const rawMax = Math.max(...values);
-    // Add 5% padding to the value range so the line doesn't touch edges
-    const range = rawMax - rawMin || 1;
-    const minVal = rawMin - range * 0.05;
-    const maxVal = rawMax + range * 0.05;
-    const valRange = maxVal - minVal;
-
-    const pts = data.map((d, i) => ({
-      x: PADDING.left + (i / Math.max(data.length - 1, 1)) * chartWidth,
-      y: PADDING.top + (1 - (d.total - minVal) / valRange) * chartHeight,
-    }));
-
-    return { points: pts, minVal, maxVal };
-  }, [data, chartWidth, chartHeight]);
-
-  if (data.length === 0) {
+const NetWorthChart: React.FC<NetWorthChartProps> = ({ data, width, height }) => {
+  if (!data || data.length === 0) {
     return (
-      <View style={[styles.empty, { width, height }]}>
-        <Text style={styles.emptyText}>No data</Text>
-      </View>
+      <div
+        style={{
+          width,
+          height,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: colors.textMuted,
+          fontSize: fontSize.sm,
+        }}
+      >
+        No data
+      </div>
     );
   }
 
-  const chartBottom = PADDING.top + chartHeight;
-  const linePath = buildPath(points);
-  const areaPath = buildAreaPath(points, chartBottom);
+  const chartWidth = width - PADDING.left - PADDING.right;
+  const chartHeight = height - PADDING.top - PADDING.bottom;
 
-  const latestValue = data[data.length - 1]?.total ?? 0;
-  const firstValue = data[0]?.total ?? 0;
-  const delta = latestValue - firstValue;
-  const isPositive = delta >= 0;
+  const values = data.map((d) => d.total);
+  const minVal = Math.min(...values);
+  const maxVal = Math.max(...values);
+  const range = maxVal - minVal || 1;
+
+  const points = data.map((d, i) => ({
+    x: PADDING.left + (i / Math.max(data.length - 1, 1)) * chartWidth,
+    y: PADDING.top + (1 - (d.total - minVal) / range) * chartHeight,
+  }));
+
+  const linePath = catmullRomPath(points);
+
+  // Closed area path: line path + down to bottom-right + back to bottom-left
+  const lastPt = points[points.length - 1];
+  const firstPt = points[0];
+  const bottomY = PADDING.top + chartHeight;
+  const areaPath =
+    linePath +
+    ` L ${lastPt.x},${bottomY} L ${firstPt.x},${bottomY} Z`;
+
+  const firstVal = values[0];
+  const lastVal = values[values.length - 1];
+  const delta = lastVal - firstVal;
+  const deltaPositive = delta >= 0;
+
+  const styles: Record<string, React.CSSProperties> = {
+    wrapper: {
+      display: 'flex',
+      flexDirection: 'column',
+      width,
+      height,
+      position: 'relative',
+    },
+    labels: {
+      display: 'flex',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      position: 'absolute',
+      bottom: 0,
+      left: PADDING.left,
+      right: PADDING.right,
+      height: PADDING.bottom,
+    },
+    labelText: {
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.medium,
+      color: colors.textMuted,
+    },
+    deltaText: {
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.semibold,
+      color: deltaPositive ? colors.positive : colors.negative,
+    },
+  };
 
   return (
-    <View style={{ width, height }}>
-      <Svg width={width} height={height}>
-        <Defs>
-          <LinearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0%" stopColor={GOLD} stopOpacity={0.25} />
-            <Stop offset="100%" stopColor={GOLD} stopOpacity={0} />
-          </LinearGradient>
-        </Defs>
+    <div style={styles.wrapper}>
+      <svg width={width} height={height - PADDING.bottom} viewBox={`0 0 ${width} ${height - PADDING.bottom}`} overflow="visible">
+        <defs>
+          <linearGradient id={GRADIENT_ID} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={colors.gold} stopOpacity={0.35} />
+            <stop offset="100%" stopColor={colors.gold} stopOpacity={0} />
+          </linearGradient>
+        </defs>
 
-        {/* Area fill */}
-        <Path d={areaPath} fill="url(#areaGrad)" />
+        {/* Filled area */}
+        <path d={areaPath} fill={`url(#${GRADIENT_ID})`} />
 
         {/* Line */}
-        <Path
+        <path
           d={linePath}
-          stroke={GOLD}
-          strokeWidth={2}
           fill="none"
+          stroke={colors.gold}
+          strokeWidth={2}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-      </Svg>
 
-      {/* Min / max labels */}
-      <View style={[styles.labelRow, { width }]}>
-        <Text style={styles.label}>{formatShortCurrency(minVal)}</Text>
-        <Text style={[styles.delta, isPositive ? styles.deltaPos : styles.deltaNeg]}>
-          {isPositive ? '+' : ''}
-          {formatShortCurrency(delta)}
-        </Text>
-        <Text style={styles.label}>{formatShortCurrency(maxVal)}</Text>
-      </View>
-    </View>
+        {/* End-point dot */}
+        <circle
+          cx={lastPt.x}
+          cy={lastPt.y}
+          r={4}
+          fill={colors.gold}
+          stroke={colors.surface}
+          strokeWidth={2}
+        />
+      </svg>
+
+      {/* Bottom labels */}
+      <div style={styles.labels}>
+        <span style={styles.labelText}>{formatCurrency(minVal)}</span>
+        <span style={styles.deltaText}>
+          {deltaPositive ? '+' : ''}{formatCurrency(delta)}
+        </span>
+        <span style={styles.labelText}>{formatCurrency(maxVal)}</span>
+      </div>
+    </div>
   );
-}
-
-const styles = StyleSheet.create({
-  empty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceElevated,
-  },
-  emptyText: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-  },
-  labelRow: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xs,
-  },
-  label: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.regular,
-    color: colors.textMuted,
-  },
-  delta: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
-  },
-  deltaPos: {
-    color: colors.positive,
-  },
-  deltaNeg: {
-    color: colors.negative,
-  },
-});
+};
 
 export default NetWorthChart;

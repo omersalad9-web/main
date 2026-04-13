@@ -1,111 +1,73 @@
-import React from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  ViewStyle,
-} from 'react-native';
-import { colors, fontSize, fontWeight, spacing, borderRadius } from '../constants/theme';
-
-type ButtonVariant = 'primary' | 'secondary';
+import React, { useState } from 'react';
+import { colors, spacing, fontSize, fontWeight, borderRadius } from '../constants/theme';
 
 interface ButtonProps {
-  title: string;
-  onPress: () => void;
-  variant?: ButtonVariant;
+  label: string;
+  onClick: () => void;
+  variant?: 'primary' | 'secondary';
   disabled?: boolean;
-  loading?: boolean;
-  style?: ViewStyle | ViewStyle[];
+  style?: React.CSSProperties;
 }
 
-export function Button({
-  title,
-  onPress,
+const Button: React.FC<ButtonProps> = ({
+  label,
+  onClick,
   variant = 'primary',
   disabled = false,
-  loading = false,
   style,
-}: ButtonProps) {
-  const isDisabled = disabled || loading;
+}) => {
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
 
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={isDisabled}
-      style={({ pressed }: { pressed: boolean }) => [
-        styles.base,
-        variant === 'primary' ? styles.primary : styles.secondary,
-        pressed && !isDisabled && (variant === 'primary' ? styles.primaryPressed : styles.secondaryPressed),
-        isDisabled && styles.disabled,
-        style,
-      ]}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: isDisabled }}
-      accessibilityLabel={title}
-    >
-      {loading ? (
-        <ActivityIndicator
-          size="small"
-          color={variant === 'primary' ? colors.nearBlack : colors.gold}
-        />
-      ) : (
-        <Text
-          style={[
-            styles.label,
-            variant === 'primary' ? styles.labelPrimary : styles.labelSecondary,
-            isDisabled && styles.labelDisabled,
-          ]}
-        >
-          {title}
-        </Text>
-      )}
-    </Pressable>
-  );
-}
-
-const styles = StyleSheet.create({
-  base: {
-    height: 52,
-    borderRadius: borderRadius.md,
+  const base: React.CSSProperties = {
+    display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-  },
-  // Primary — solid gold background
-  primary: {
-    backgroundColor: colors.gold,
-  },
-  primaryPressed: {
-    backgroundColor: '#D4A45A',
-  },
-  // Secondary — transparent with gold border
-  secondary: {
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: colors.gold,
-  },
-  secondaryPressed: {
-    backgroundColor: colors.accentDim,
-  },
-  disabled: {
-    opacity: 0.4,
-  },
-  label: {
+    paddingTop: spacing.sm + 2,
+    paddingBottom: spacing.sm + 2,
+    paddingLeft: spacing.lg,
+    paddingRight: spacing.lg,
+    borderRadius: borderRadius.md,
     fontSize: fontSize.md,
-    letterSpacing: 0.3,
-  },
-  labelPrimary: {
-    fontWeight: fontWeight.bold,
-    color: colors.nearBlack,
-  },
-  labelSecondary: {
     fontWeight: fontWeight.semibold,
-    color: colors.gold,
-  },
-  labelDisabled: {
-    opacity: 0.7,
-  },
-});
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    border: 'none',
+    outline: 'none',
+    transition: 'background-color 0.15s ease, opacity 0.15s ease, transform 0.1s ease',
+    userSelect: 'none' as const,
+    letterSpacing: '0.2px',
+    opacity: disabled ? 0.45 : 1,
+    transform: pressed && !disabled ? 'scale(0.97)' : 'scale(1)',
+    boxSizing: 'border-box' as const,
+  };
+
+  const primaryStyle: React.CSSProperties = {
+    backgroundColor: hovered && !disabled ? '#d4a355' : colors.gold,
+    color: colors.nearBlack,
+    border: 'none',
+  };
+
+  const secondaryStyle: React.CSSProperties = {
+    backgroundColor: 'transparent',
+    color: hovered && !disabled ? '#d4a355' : colors.gold,
+    border: `1.5px solid ${hovered && !disabled ? '#d4a355' : colors.gold}`,
+  };
+
+  const variantStyle = variant === 'primary' ? primaryStyle : secondaryStyle;
+
+  return (
+    <button
+      style={{ ...base, ...variantStyle, ...style }}
+      onClick={disabled ? undefined : onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); setPressed(false); }}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      disabled={disabled}
+    >
+      {label}
+    </button>
+  );
+};
 
 export default Button;
