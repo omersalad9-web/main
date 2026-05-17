@@ -13,16 +13,30 @@ Activate when the user:
 - Asks to "produce a production brief" or "plan an animated documentary"
 - Provides a finished or draft script and asks what to do next
 - Asks how to turn a topic/script into a YouTube documentary video
-- Uses phrases like "Fern-style", "solo build", "AI documentary", "shot list"
+- Wants to commission a production vendor to build the video for them
+- Uses phrases like "Fern-style", "solo build", "AI documentary", "shot list", "vendor brief", "commission"
+
+## Two modes
+
+Before generating anything, clarify which output the user needs:
+
+**Mode A — Solo build brief** (default)
+A DIY production guide the user executes themselves with ElevenLabs, Veo 3, Sora 2, Whisk, DaVinci Resolve, and Epidemic Sound. Covers the full shot list with generation prompts, tool settings, edit rhythm, and publish checklist. Cost: ~£180–260.
+
+**Mode B — Vendor commissioning brief**
+A client-facing document sent to a production agency or freelancer. Specifies outcomes (not tools), milestones, deliverables, creative guardrails, and payment structure. The vendor chooses their own stack.
+
+Both can be generated from the same locked script. If the user has a script and wants to explore both options, generate Mode A first (it informs the quality expectations in Mode B).
 
 ## Inputs you need
 
-Before generating the brief, confirm:
+Before generating either brief, confirm:
 1. **Script** — is there a finished script, or should you draft one first?
 2. **Topic/angle** — what is the central argument or revelation of the film?
 3. **Target runtime** — default is 16–18 minutes
 4. **Tone** — default is Fern/Real Stories: restrained, academic, no dramatic inflection
 5. **Platform** — default is YouTube; adjust monetisation notes for Nebula/Patreon if specified
+6. **Mode** — solo build or vendor commission (or both)?
 
 If the script is missing, offer to write it first using the narrative structure in Section 1 of the template.
 
@@ -111,5 +125,6 @@ Example:
 
 ## Reference materials
 
-- `resources/production_brief_example.md` — complete worked example (Unit 731, 84 shots)
+- `resources/production_brief_example.md` — complete worked example, Mode A (Unit 731, 84 shots, solo build)
 - `resources/shot_list_template.md` — blank shot list table ready to populate
+- `resources/vendor_brief_template.md` — Mode B vendor commissioning brief template (outcomes-based, tool-agnostic)
