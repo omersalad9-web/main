@@ -1,0 +1,261 @@
+// ============================================================
+// Africa Finance Review — Prisma Schema
+// Provider: PostgreSQL (Supabase)
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------
+// ENUMS
+// ------------------------------------------------------------
+
+enum ArticleMove {
+  GAINER
+  LOSER
+  NEUTRAL
+}
+
+enum ArticleSignal {
+  BUY
+  WATCH
+  SELL
+  HOLD
+}
+
+enum UserPlan {
+  free
+  analyst
+  diaspora_pro
+}
+
+enum AlertType {
+  PRICE
+  FX_RATE
+  SIGNAL
+  KEYWORD
+}
+
+enum AlertChannel {
+  EMAIL
+  IN_APP
+}
+
+// ------------------------------------------------------------
+// ARTICLES
+// ------------------------------------------------------------
+
+model Article {
+  id          String        @id @default(cuid())
+  slug        String        @unique
+  kicker      String
+  headline    String
+  dek         String
+  byline      String
+  dateline    String
+  body        String        @db.Text
+  country     String
+  region      String
+  sector      String
+  move        ArticleMove   @default(NEUTRAL)
+  signal      ArticleSignal @default(HOLD)
+  magnitude   Float         @default(0)
+  verdict     String        @db.Text
+  gainers     String[]
+  losers      String[]
+  watchlist   String[]
+  diasp_opp   String?       @db.Text
+  pull_quote  String?
+  read_time   Int           @default(3)
+  source_urls Json          @default("[]")
+  published_at DateTime     @default(now())
+  created_at   DateTime     @default(now())
+  is_premium  Boolean       @default(false)
+
+  // Relations
+  bookmarks   Bookmark[]
+
+  @@index([country])
+  @@index([region])
+  @@index([sector])
+  @@index([signal])
+  @@index([published_at(sort: Desc)])
+  @@index([slug])
+  @@map("articles")
+}
+
+// ------------------------------------------------------------
+// MARKET SNAPSHOTS
+// ------------------------------------------------------------
+
+model MarketSnapshot {
+  id         String   @id @default(cuid())
+  exchange   String
+  country    String
+  price      Float
+  change_pct Float
+  volume     BigInt?
+  fetched_at DateTime @default(now())
+
+  @@index([exchange])
+  @@index([country])
+  @@index([fetched_at(sort: Desc)])
+  @@map("market_snapshots")
+}
+
+// ------------------------------------------------------------
+// FX RATES
+// ------------------------------------------------------------
+
+model FxRate {
+  id         String   @id @default(cuid())
+  pair       String
+  rate       Float
+  change_pct Float    @default(0)
+  fetched_at DateTime @default(now())
+
+  @@index([pair])
+  @@index([fetched_at(sort: Desc)])
+  @@map("fx_rates")
+}
+
+// ------------------------------------------------------------
+// COMMODITY PRICES
+// ------------------------------------------------------------
+
+model CommodityPrice {
+  id         String   @id @default(cuid())
+  commodity  String
+  price      Float
+  unit       String
+  change_pct Float    @default(0)
+  fetched_at DateTime @default(now())
+
+  @@index([commodity])
+  @@index([fetched_at(sort: Desc)])
+  @@map("commodity_prices")
+}
+
+// ------------------------------------------------------------
+// USERS
+// ------------------------------------------------------------
+
+model User {
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  name               String?
+  emailVerified      DateTime?
+  image              String?
+  plan               UserPlan  @default(free)
+  stripe_customer_id String?   @unique
+  articles_read_today Int      @default(0)
+  regions            String[]  @default([])
+  sectors            String[]  @default([])
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  // NextAuth relations
+  accounts  Account[]
+  sessions  Session[]
+
+  // App relations
+  bookmarks Bookmark[]
+  alerts    Alert[]
+
+  @@map("users")
+}
+
+// ------------------------------------------------------------
+// BOOKMARKS
+// ------------------------------------------------------------
+
+model Bookmark {
+  user_id    String
+  article_id String
+  created_at DateTime @default(now())
+
+  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  article Article @relation(fields: [article_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, article_id])
+  @@index([user_id])
+  @@index([article_id])
+  @@map("bookmarks")
+}
+
+// ------------------------------------------------------------
+// ALERTS
+// ------------------------------------------------------------
+
+model Alert {
+  id      String       @id @default(cuid())
+  user_id String
+  type    AlertType
+  value   String
+  channel AlertChannel @default(IN_APP)
+  active  Boolean      @default(true)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([type])
+  @@map("alerts")
+}
+
+// ------------------------------------------------------------
+// NEXTAUTH — Account
+// ------------------------------------------------------------
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+// ------------------------------------------------------------
+// NEXTAUTH — Session
+// ------------------------------------------------------------
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// ------------------------------------------------------------
+// NEXTAUTH — VerificationToken
+// ------------------------------------------------------------
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
